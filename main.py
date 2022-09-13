@@ -110,8 +110,7 @@ async def logo_process(update, context) -> None:
     if file_path:
         print(file_path)
 def main():
-    application = Application.builder().token(
-        "5787383683:AAHT4lguZldPEp0k3uDK-48zCP4rpOJUzYs").build()
+    application = Application.builder().token(TELEGRAM_API_KEY).build()
     application.add_handler(CommandHandler("text", text_process))
     application.add_handler(MessageHandler(filters.CAPTION & ~filters.COMMAND, logo_process))
     application.run_polling()

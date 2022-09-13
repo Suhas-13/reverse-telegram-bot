@@ -66,8 +66,8 @@ async def run_text_match(word_list, exclude_url=None):
 
 
 async def run_image_match(image_url, exclude_url=None):
-    options = {"engine": "google_reverse_image",
-               "image_url": image_url, "api_key": SERP_API_KEY}
+    options = {"engine": "yandex_images",
+               "url": image_url, "api_key": SERP_API_KEY}
     search = GoogleSearch(options)
     results = search.get_dict()
 
@@ -81,10 +81,13 @@ async def run_image_match(image_url, exclude_url=None):
                 url = urlparse(result['link']).netloc
                 if url.replace("wwww.", "") == exclude_url:
                     continue
-                cached_page = result.get("cached_page_link", None)
-                if cached_page is not None and not cached_page.startswith("http"):
-                    cached_page = None
-                local_matches.append((result['title'], result['link'], cached_page, result.get("thumbnail", None)))
+                thumbnail = result.get("thumbnail", None)
+                if thumbnail:
+                    thumbnail = thumbnail.get("link", None)
+                original_image = result.get("original_image", None)
+                if original_image:
+                    original_image = original_image.get("link")
+                local_matches.append((result['title'], result['link'], thumbnail, original_image))
     return local_matches
 
 
@@ -158,18 +161,29 @@ async def logo_process(update, context) -> None:
             for result in image_matches[0:5]:
                 if result[1] is None:
                     continue
-                elif result[2] is None:
+                elif result[3] is None or result[2] is None:
                     message += (result[0] + "     |    <a href='" +
                                 result[1] + "'>Live Page</a>\n\n")
                 else:
                     message += (result[0] + "     |     <a href='" + result[1] +
-                                "'>Live Page</a>     |    <a href='" + result[2] + "'>Cached Page</a>\n\n")
-                if result[3] is not None:
-                    images.append((result[0], result[3]))
+                                "'>Live Page</a>     |    <a href='" + result[3] + "'>Image</a>    |    <a href='" + result[2] + "'>Thumbnail</a>\n\n")
+                if result[2] is not None and result[2].startswith("http"):
+                    images.append((result[0], result[2]))
             message += "\n\nTotal of " + \
                 str(len(image_matches)) + " matching results found. Any available thumbnails will be sent shortly."
             await update.message.reply_text(message, parse_mode="HTML", disable_web_page_preview=True)
-            await update.message.reply_media_group([telegram.InputMediaPhoto(i[1], caption=i[0]) for i in images])
+            if len(images) != 0:
+                telegram_images = []
+                for i in images:
+                    try:
+                        telegram_images.append(telegram.InputMediaPhoto(i[1], caption=i[0]))
+                    except Exception as e:
+                        print(e)
+                try:
+                    await update.message.reply_media_group(telegram_images)
+                except Exception as e:
+                    print("HERE")
+                    print(e)
 
 
 def main():

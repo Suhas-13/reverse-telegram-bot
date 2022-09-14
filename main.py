@@ -11,6 +11,9 @@ from bs4.element import Comment
 from urllib.parse import urlparse
 import validators
 import traceback
+from urllib import request as ulreq
+from PIL import ImageFile
+
 
 import requests
 from urllib.parse import urljoin
@@ -34,7 +37,9 @@ WEBSITE_USAGE_FORMAT = "Incorrect usage of this command. Command Usage: /website
 INVALID_URL_MESSAGE = "The wesbite you entered was not in the correct format. Websites should be in the format: http://example.com"
 NO_TEXT_FOUND = "Not enough text content found on the website meeting conditions for check (minimum 10 words and 30 characters per piece of text)."
 JAVASCRIPT_REQUIRED_MESSAGE = "Unfortunately websites that require JavaScript are not supported at this time.\n\nIf you believe this website does not require JavaScript, please contact the developer."
-EXCLUDED_WORDS = ["twitter", "telegram", "youtube", "twitter", "instagram", "discord", "reddit", "tiktok"]
+EXCLUDED_WORDS = ["twitter", "telegram", "youtube", "instagram", "discord", "reddit", "tiktok"]
+
+
 async def generate_sub_lists(word_list, max_words_per_list):
     return np.array_split(word_list, math.ceil(len(word_list)/max_words_per_list))
 
@@ -85,6 +90,31 @@ async def run_text_match(word_list, exact_match, exclude_url=None):
             search_queue.put(result)
             await asyncio.sleep(1.3)
     return list_of_matches
+
+
+def getsizes(uri):
+    # get file size *and* image size (None if not known)
+    try:
+        file = ulreq.urlopen(uri)
+        size = file.headers.get("content-length")
+        if size:
+            size = int(size)
+        p = ImageFile.Parser()
+        while True:
+            data = file.read(1024)
+            if not data:
+                break
+            p.feed(data)
+            if p.image:
+                return size, p.image.size
+                break
+        file.close()
+    except Exception as e:
+        print(e)
+        return None
+    if not size:
+        return None
+    return size
 
 
 async def run_image_match(image_url, exclude_url=None):
@@ -139,10 +169,10 @@ async def text_process(update, context, exact_match=False) -> None:
         if len(text_matches) == 1:
             displayed_results = text_matches[0][0:5]
         elif len(text_matches) == 2:
-            displayed_results = text_matches[0][0:3] + text_matches[1][0:3]
+            displayed_results = text_matches[0][0:2] + text_matches[1][0:2]
         else:
-            displayed_results = text_matches[0][0:3] + \
-                text_matches[1][0:3] + text_matches[2][0:3]
+            displayed_results = text_matches[0][0:2] + \
+                text_matches[1][0:2] + text_matches[2][0:2]
         message = "Matching Results (please note that results may be from a cache and some sites may no longer contain matching text):\n\n"
         for result in displayed_results:
             if result[1] is None:
@@ -207,12 +237,12 @@ async def logo_process(update, context) -> None:
                             telegram.InputMediaPhoto(i[1], caption=i[0]))
                     except Exception as e:
                         print(e)
-                        #print(traceback.format_exc())
+                        # print(traceback.format_exc())
                 try:
                     await update.message.reply_media_group(telegram_images)
                 except Exception as e:
                     print(e)
-                    #print(traceback.format_exc())
+                    # print(traceback.format_exc())
 
 
 def tag_visible(element):
@@ -260,28 +290,26 @@ async def process_website_text(text, exclude_url, exact_match=False):
             displayed_results = text_matches[0][0:3] + \
                 text_matches[1][0:3] + text_matches[2][0:3]
         message = 'Text from website: "' + \
-            str(text) + '"\n\n\nMatching Results (please note that results may be from a cache and some sites may no longer contain matching text):\n\n'
+            str(text) + '"\n\n\nMatching Results:\n\n'
         for result in displayed_results:
             if result[1] is None:
                 continue
-            elif result[2] is None:
+            else:
                 message += (result[0] + "     |    <a href='" +
                             result[1] + "'>Live Page</a>\n\n")
-            else:
-                message += (result[0] + "     |     <a href='" + result[1] +
-                            "'>Live Page</a>     |    <a href='" + result[2] + "'>Cached Page</a>\n\n")
-        message += "\n\nTotal of " + str(t_count) + " matching results found."
         return message
 
 
 async def get_images(soup):
     return soup.findAll("img") + soup.findAll("svg")
 
-async def excluded_image(image, website_url):
+
+async def excluded_image(image):
     for excluded_word in EXCLUDED_WORDS:
-        if excluded_word in str(image):
-            return True        
+        if excluded_word in str(image.attrs):
+            return True
     return not validators.url(image.attrs['src'])
+
 
 async def process_site(update, context, exact_match=False):
     if len(context.args) < 1:
@@ -296,7 +324,6 @@ async def process_site(update, context, exact_match=False):
         await update.message.reply_text("Received Error Code: " + str(response.status_code) + " while trying to reach website. Please try again shortly.")
         return
     else:
-        print("PARSING SITE")
         page_html = response.content.decode("utf-8")
         if await javascript_required(page_html):
             await update.message.reply_text(JAVASCRIPT_REQUIRED_MESSAGE)
@@ -323,9 +350,11 @@ async def process_site(update, context, exact_match=False):
             message = await process_website_text(visible_text, website_url, exact_match)
             if message:
                 await update.message.reply_text(message, parse_mode="HTML", disable_web_page_preview=True)
+
         images = await get_images(soup)
-        max_count = 0
+        processed_images = []
         seen_images = set()
+
         for image in images:
             if 'src' not in image.attrs or not image.attrs['src']:
                 continue
@@ -333,11 +362,35 @@ async def process_site(update, context, exact_match=False):
                 image.attrs['src'] = urljoin(website_url, image.attrs['src'])
             if image.attrs['src'] in seen_images:
                 continue
+            if await excluded_image(image):
+                continue
+            image_size = getsizes(image.attrs['src'])
+            if image_size and image_size[1]:
+                if image_size[1][0] >= 32 and image_size[1][1] >= 32:
+                    image.attrs['size'] = image_size[1]
+                    image.attrs['total_size'] = image_size[1][0] * image_size[1][1]
+                    processed_images.append(image)
             seen_images.add(image.attrs['src'])
-            if max_count == MAX_IMAGES_PER_WEBSITE:
+        
+
+        processed_images.sort(key=lambda x: x.attrs['total_size'], reverse = True)
+        count = 0
+
+        for image in processed_images:
+            if count == MAX_IMAGES_PER_WEBSITE:
                 return
             else:
                 try:
+                    if count >= 3:
+                        min_total = 64 * 64
+                    elif count >= 6:
+                        min_total = 80 * 80
+                    elif count >= 13:
+                        min_total = 100 * 100
+                    else:
+                        min_total = 32 * 32
+                    if image.attrs['total_size'] < min_total:
+                        continue
                     image_matches = await run_image_match(image.attrs['src'], website_url)
                     if image_matches == False:
                         await update.message.reply_text(WEBSITE_ERROR_MESSAGE)
@@ -346,7 +399,7 @@ async def process_site(update, context, exact_match=False):
                     else:
                         message = "Matching Results:\n\n"
                         images = []
-                        for result in image_matches[0:5]:
+                        for result in image_matches[0:3]:
                             if result[1] is None:
                                 continue
                             elif result[3] is None or result[2] is None:
@@ -354,12 +407,9 @@ async def process_site(update, context, exact_match=False):
                                             result[1] + "'>Live Page</a>\n\n")
                             else:
                                 message += (result[0] + "     |     <a href='" + result[1] +
-                                            "'>Live Page</a>     |    <a href='" + result[3] + "'>Image</a>    |    <a href='" + result[2] + "'>Thumbnail</a>\n\n")
+                                            "'>Live Page</a>     |    <a href='" + result[3] + "'>Image</a>\n\n")
                             if result[2] is not None and result[2].startswith("http"):
                                 images.append((result[0], result[2]))
-                        message += "\n\nTotal of " + \
-                            str(len(image_matches)) + \
-                            " matching results found. Any available thumbnails will be sent shortly."
                         await update.message.reply_photo(image.attrs['src'], caption=message, parse_mode="HTML")
                         if len(images) != 0:
                             telegram_images = []
@@ -372,9 +422,8 @@ async def process_site(update, context, exact_match=False):
                         await update.message.reply_media_group(telegram_images)
 
                 except Exception as e:
-                    #print(traceback.format_exc())
                     print(e)
-                max_count += 1
+                count += 1
         await update.message.reply_text("Finished processing website: " + website_url)
         comments = filter(comments_finder, text_elements)
 

@@ -4,6 +4,7 @@ import math
 from serpapi import GoogleSearch
 from queue import Queue
 import numpy as np
+import html
 import re
 import telegram
 from bs4 import BeautifulSoup
@@ -41,6 +42,8 @@ EXCLUDED_WORDS = ["twitter", "telegram", "youtube", "instagram", "discord", "red
 
 
 async def generate_sub_lists(word_list, max_words_per_list):
+    if len(word_list) == 0:
+        return []
     return np.array_split(word_list, math.ceil(len(word_list)/max_words_per_list))
 
 
@@ -114,7 +117,7 @@ def getsizes(uri):
         return None
     if not size:
         return None
-    return size
+    return None
 
 
 async def run_image_match(image_url, exclude_url=None):
@@ -152,6 +155,7 @@ async def text_process(update, context, exact_match=False) -> None:
     word_list = context.args
     if len(word_list) == 0:
         await update.message.reply_text(TEXT_USAGE_FORMAT)
+        return
     if len(word_list) >= MAX_WORD_COUNT:
         await update.message.reply_text(OVER_WORD_COUNT_MESSAGE.format(MAX_WORD_COUNT))
         return
@@ -169,10 +173,10 @@ async def text_process(update, context, exact_match=False) -> None:
         if len(text_matches) == 1:
             displayed_results = text_matches[0][0:5]
         elif len(text_matches) == 2:
-            displayed_results = text_matches[0][0:2] + text_matches[1][0:2]
+            displayed_results = text_matches[0][0:3] + text_matches[1][0:3]
         else:
-            displayed_results = text_matches[0][0:2] + \
-                text_matches[1][0:2] + text_matches[2][0:2]
+            displayed_results = text_matches[0][0:3] + \
+                text_matches[1][0:3] + text_matches[2][0:3]
         message = "Matching Results (please note that results may be from a cache and some sites may no longer contain matching text):\n\n"
         for result in displayed_results:
             if result[1] is None:
@@ -251,7 +255,6 @@ def tag_visible(element):
     ]:
         return False
     if isinstance(element, Comment):
-        print(element.text)
         return False
     return True
 
@@ -283,12 +286,12 @@ async def process_website_text(text, exclude_url, exact_match=False):
     else:
         t_count = sum([len(i) for i in text_matches])
         if len(text_matches) == 1:
-            displayed_results = text_matches[0][0:5]
+            displayed_results = text_matches[0][0:2]
         elif len(text_matches) == 2:
-            displayed_results = text_matches[0][0:3] + text_matches[1][0:3]
+            displayed_results = text_matches[0][0:2] + text_matches[1][0:2]
         else:
-            displayed_results = text_matches[0][0:3] + \
-                text_matches[1][0:3] + text_matches[2][0:3]
+            displayed_results = text_matches[0][0:2] + \
+                text_matches[1][0:2] + text_matches[2][0:2]
         message = 'Text from website: "' + \
             str(text) + '"\n\n\nMatching Results:\n\n'
         for result in displayed_results:
@@ -321,7 +324,7 @@ async def process_site(update, context, exact_match=False):
         return
     response = requests.get(website_url)
     if not response:
-        await update.message.reply_text("Received Error Code: " + str(response.status_code) + " while trying to reach website. Please try again shortly.")
+        await update.message.reply_text("Received Error Code: " + str(response.status_code) + " while trying to reach website. Please try again shortly. This could be because the website is behind a WAF like Cloudflare.")
         return
     else:
         page_html = response.content.decode("utf-8")
@@ -347,7 +350,7 @@ async def process_site(update, context, exact_match=False):
             await update.message.reply_text(NO_TEXT_FOUND)
         visible_texts = visible_texts[0: MAX_TEXTS_PER_WEBSITE]
         for visible_text in visible_texts:
-            message = await process_website_text(visible_text, website_url, exact_match)
+            message = await process_website_text(html.escape(visible_text), website_url, exact_match)
             if message:
                 await update.message.reply_text(message, parse_mode="HTML", disable_web_page_preview=True)
 

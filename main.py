@@ -33,12 +33,15 @@ TEXT_USAGE_FORMAT = "Incorrect usage of this command. Command Usage: /text Sampl
 TEXT_ERROR_MESSAGE = "An error occured while checking the text you submitted. Please try again shortly. If the error continues to occur please contact the developer."
 WEBSITE_ERROR_MESSAGE = "An error occured while checking some part of the website you submitted. If the error continues to occur please contact the developer."
 IMAGE_ERROR_MESSAGE = "An error occured while checking an image you submitted. Please try again shortly. If the error continues to occur please contact the developer."
-NO_MATCHES_MESSAGE = "Our bot couldn't find any matches. This does not guarantee the uniqueness of the text/image."
+NO_MATCHES_MESSAGE = "Our bot couldn't find any matches. This does not guarantee the uniqueness of the text/image/contract."
 WEBSITE_USAGE_FORMAT = "Incorrect usage of this command. Command Usage: /website https://example.com"
+CONTRACT_USAGE_FORMAT = "Incorrect usage of this command. Comamnd Usage: /contract CONTRACT_ADDRESS"
 INVALID_URL_MESSAGE = "The wesbite you entered was not in the correct format. Websites should be in the format: http://example.com"
 NO_TEXT_FOUND = "Not enough text content found on the website meeting conditions for check (minimum 10 words and 30 characters per piece of text)."
+CONTRACT_ERROR_MESSAGE = "An error occured while searching for matching contracts. Please check that you provided a valid contract address."
 JAVASCRIPT_REQUIRED_MESSAGE = "Unfortunately websites that require JavaScript are not supported at this time.\n\nIf you believe this website does not require JavaScript, please contact the developer."
-EXCLUDED_WORDS = ["twitter", "telegram", "youtube", "instagram", "discord", "reddit", "tiktok"]
+EXCLUDED_WORDS = ["twitter", "telegram", "youtube",
+                  "instagram", "discord", "reddit", "tiktok"]
 
 
 async def generate_sub_lists(word_list, max_words_per_list):
@@ -314,6 +317,65 @@ async def excluded_image(image):
     return not validators.url(image.attrs['src'])
 
 
+async def find_similar_contracts(contract_address):
+    headers = {
+        'authority': 'etherscan.io',
+        'accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.9',
+        'accept-language': 'en-US,en-SG;q=0.9,en;q=0.8',
+        'cache-control': 'max-age=0',
+        'dnt': '1',
+        'origin': 'https://etherscan.io',
+        'referer': 'https://etherscan.io/find-similar-contracts?a=0xcbaff378442e70f587f65ac4abce603763816117&lvl=5',
+        'sec-ch-ua': '"Google Chrome";v="105", "Not)A;Brand";v="8", "Chromium";v="105"',
+        'sec-ch-ua-mobile': '?0',
+        'sec-ch-ua-platform': '"Windows"',
+        'sec-fetch-dest': 'document',
+        'sec-fetch-mode': 'navigate',
+        'sec-fetch-site': 'same-origin',
+        'sec-fetch-user': '?1',
+        'upgrade-insecure-requests': '1',
+        'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/105.0.0.0 Safari/537.36',
+    }
+
+    params = {
+        'a': contract_address,
+        'lvl': '5',
+    }
+
+    data = {
+        '__VIEWSTATE': 'cPKM2SrsJwSeqtwRvLLLUTkqf9G11WWVkdxljioW7zZw5okFQO20F300+epcv9w6wYn3/snuSRsQ76utIF/1G89/Q+qlfMH7ULWHfEiMxuOGKio2ed85nJGhfEfj/Vbk8GbRhS+BFgi9yA5TFpzNw0RbkIFLbm9uQCHTfBOEPXi3mw5edycvRmB0quhIr0FqndfoJf+DmJyLXVqOhyFmNUy2PfEvEdjQ/OttEmo4jqWCubdzvw9rxY6ViYdKrJdiAHLrbr1Bk7AkIH8lM71uMkX9X3xn/POL4OIOYn8ktSis4ueztSme5foIqq/D0k4zvsDETyqPHUIWylq841z0nE37FBzyFZPiyqNAl7I615bF4FYdtPmJLWgwg1MPFVhl5R4ha0wSwnNagFrK83VukfyF7s7vC6B2tM5jrhU13fR5FgUm+vgDsDdNGznRKDK6g9sYTD+6h5GKQQE1iAytDRODtKVNrSOGFhh5VchvlU5CM7wWL0I0mi89lhp/mcwCTIlrTGl4bBDuIVPsusDMCETgwU2TFuTXcqD7fd+WJ7oJnOvhx713CJGPbUKts92eymQ2iBzBbOafawiKZC1RQWvcfWR9Ngychcf7/F5Xj64ayhy9FAwXK8uIuH9W5mWktyFeMxOJHCUsTxA7iFqIjPFxeCqO/7Y0JIftOdPt+R69BkP/kT+c/7caiCNDxw0bgpjX0oxrG2iB+oajedoCJu0wkRsLHARewPBaTvZE3D+NPFSECAHajlwo6+M+TsjRcNcCyJc2PQXW+elLOfoD7qzSPC8CSydxVLPSZj6lhSQvfdRY7L703ssHt51QOBTSASihO/SskyS9MH1GGAdNzdgS/ojDiiIHj8ITHNHDmIGiRBBgZDFSIdcz6Qa8bstvWArFRkj1TsDJm5XlxBQFuXiXfB/lrpAFS91r+cBpgFQaWgj2xmRJPlVB3alKC/as55avA1VdkU41dJPS+hmTxI+8gGPBh1QapCHZuvVQsT5FXL9W/3CLVSE3lZ2XODxC+wxqc+5kxrsyWdbDtw6FIc00fAq7cp9qRtjwwXrWvTH+QtlPiImCsQvmLODy+52N6BCRCkHWOo48nPdzSIEwEcf/bzGnqVf2tTKDi+DyWixCSkGANg55rBQyRGHLVLB85qV955OM90jWJ7Q56szeDRfbhaFTGxfj0vUVBe8hFKgOXpJ6ppjsE4EdtQJcgoFX3kyZt/tSany8toiVgl8hXwcvM550O2OtQ9Hlj7NB2el7NkCO+3hzLD0qgbk38WKCkKR4uwMwi79YHV/QAdUutgy0wIj7wrpg94nTDE0VV0Ds8YEdHbyh1mvYBsALQMgj5VzFlxuZiROVv1OKtrCLkpf1YAlU6oAUXtkXMZBxtrHIPPvwDVCupEOjx9p6PYPv9U8fdRwNEwYZ9pSCFi1eZVLEf0RWs6jclGvjncykUtKolBB4E9LFVfANoT8uRhGZmI4roMcZRvokzS09pckQ3eFfblKTvuRxbiPLH+bLUf+LaiHvplfeLosABlScgNTgBs3+o/d58gmPPDP2Gsnu6I6UdmCwzN/h073dbk7qjODrtqRDLcnOIU23kEixYan/vI6cnisZI27IVlc9h35UPk9qkOqYozn3VxTdJsdTOwuC7hKLu3YkKY/EQ6F7IKCh8O66IYqJH7c64n+Q95FzUHQzJj9N1hwp1ImUtI8Oul3dUw6ChfU4MkdbXJ3ReX0s+zPyij1/6Mru9+9HiIUWRZ2QYs7p1dLAWdPfh2NiSu91CXmYbkGlMEWRQy1aFFC2BIXeh3xhhtX0EPZBDSPjx2JMd8UjugImkR2fXdnFj3cNGlGuzJO6y7jqVdWyfmQaF4twWC/p1xbhyL6iViDDWq8EopX3JxmJUQP7sTqLRYLYyERyP9OUIQW9wEtThBWsdSplzNUQ9V7HHTsTBwwIcYQaO2eniTx0FOjevjrDmrVV1qPh100zh5qqq80NdwyD+Mtk9O7VKn1Kv+auvsUcRUDH/yh/cT/JmOZUWCCg0VOcDukZnhCEciayowfm58uFOWm2KMMeFLyQzntMW2BAYfcLqXE2/h2F85ECdFIghngXli3KHhTra3bPIUToMlGItFz8QZLN22LlbB2/iWvsHZ7Pzj+is19jNwixPjllZly1BIkev3uTe2aW3noAqUd0EJt7WKWSGUB6uQn8m/qQr2a8fE4HRmTcsNzaSCGwXy8nPmi0tbtvc8nOzQbe8vnOlJCd9wuOS8uvFfSSgLjpzkUtN8UqHkywuS/UrS+ZmhXswKpTS+5MNigHKQ95r3nIM6Gr3a8Et/uQ1+i955p0oXTBP0xnsWG7ReN9/g84CfZ1wF1YuaYcrb00Hk5Ojdca2awPfSBOXKKJ/BFmzn9VLfD+5hp1e77Ia2RgMGaqdn1xyFxVtuX/oTUU6YgKfk4TWt+A63H7jZmXZtgeNMIBb31qL7pR/XTo0nWtdIa9gocSf9XBK3qbGYu0nSirMj+ptIhgFvBZ0dG+B8BtSp2YwaLzZ36H+pQHnxx/KE9+oy3SwJTI2v7eQKOTkPFSCKj1KhXD6ZDNeNZoQOCR/jVpBVpdOQUt9Vad/asJmq+YdxT7Q/wpEBQtJAHLgI5fUf44ImcqLnrp1NUr8Bp9Hqlh4m1nf2oynhRL2k8fcN9RJBhHZ/o+t3m0/U+7UdXjBk1WIy/XMsps8iz7U9fZj8ezWufp1y2tJctuTRewJ6mojBSmj93c2hNY9YJbCT/hqEla/g5RN1YMpldKoab720Kmp2Bc0CouHlEnL61oQeaJxM8sEqUNRh31/Fxm/q/HAD6ahA6KKXIg8Htc6LjLGAhlDUFySkT813aSnTrytdwe/jcF4l+9JcKALyHHO1czjnlV222HZzxry0GOEKC+t9iLRCaZ4C5cDaCqe2nGIBk+5y2RC2BcGZbHIw5rBR9PeCXMSl9WX8viV1BpibHrmGvDhzI+DHT0SqR07BgKcjfLH/NjwETvRQ+21F+g0SsIvm0bIt1iUc13XN5mcS4WcJGeJnNM0jv8TAA/CegEjwn3HhrZFugs/LgFqFq7EDEoNdvajUsZgGNvjM+GpZebWxKMOAjjw7eYWV9VPqoumcSC6yKGsevKi6qYFCkGLaoQNaok025z3NBFex76f/uMkcYsoBIacsVj5rLoaqyu9eHbTEBf/629ak/o1tv9jKehEJtRKZ5U0kG/y+7lknG/1idJC+LAp2SDkoqeVYosrowqAii2tOec+RLwHppxKr8YLgb0lkTJtyI14ZWl4/J4fV7yeL8tmlhcR/QUx0hJ9Wn+CSr4y/kPp/LhBysp/2O+Axx3Wn8T1C6dvk2dPP85ify6b3otqMpb51OtawIYd9H/kq4NAZgQfJ5kofLW+hxDGKHXURr129u/Mq/BGP8uVYhOX/tBuxLeJVf12WhXlmLV4k7/c6McZASKJpcNcljqIFqi5d6i8ANcu7VWlRB/zjVsx0aub0wqDOuuwTVzxcPJroT4LYnhXn8Bys8zjHnoRHyW7nuKyhMVs0h4Ybn/2ZOrFFa4vSD4tLOTIoS/nixnN0awlgZIlMxpLqt99N6N9kjV7yAYV19RDnmGLglTRnRKhVTp43VWhxUqhPz0OF/sP+TaS+9YnmKWPmf3oFOMPZ8d6Bh8ExHO9SMDAhv6hacpyKACNhEfp+lNA9kdIi4Xp/ExRAFjJT2W5gnWIHqLglSkjyjNNvO7EArbEwS9lSIpl/iDYU03qLziEQEKUjrnDJgEXObgiJQWyUkDBAULRVmUdliWXJfRBW+FPYEnU0rQcB0w+OqTuiRs0B0s8OO9s3eifo+rML73pXSjpXfFiHfrf+VlIrKJONuX1VR/cKIAtpcgnId2hkghvxq6wDHwTfug7mVOaPvBdLdmPS3IsIOtYuQ8DfZo1MqJA/2PmgrqMJaJZjEts+CTNIvQPvIG3nPLH04+cNTR1hI357ZjdFvkIinscFeh1gj6xrFSihSm4v9QUNoJYVcVb2COGjJ9vtQ=',
+        '__EVENTVALIDATION': 'QnPkGVkkxxtjHQ7dxFi+2ClU9G3gFJAbkZae504dxRIt5JLERn6xJvv5aV8g9gPVaPRu568AGVX1Fyl2ndl7lSIi0woX2S0g/rghDQ9Exphv6VMoGpy+c4MzTd+3qj/zzFf/bitroPPqOdpfthWUI4B4LvVNP/cvEJCL7Gxik3aPhSpbrsb9bG2kilDRjd7k',
+        'ctl00$ContentPlaceHolder1$txtContractAddress': contract_address,
+        'ctl00$ContentPlaceHolder1$Button1': 'Search',
+    }
+
+    response = requests.post('https://etherscan.io/find-similar-contracts',
+                             params=params, headers=headers, data=data)
+
+    soup = BeautifulSoup(response.content.decode("utf-8"), "html.parser")
+
+    base_results_box = soup.find("h3", {"class": "card-header-title mb-3"})
+    if not base_results_box:
+        return False
+    num_results = int(base_results_box.find("b").find(text=True))
+
+    matches = []
+    if num_results != 0:
+        results = soup.find("div", {"class": "table-responsive mb-1"})
+        rows = results.findAll("tr")
+        for row in rows[1:len(rows)]:
+            cols = row.findAll("td")
+            date = cols[2].find(text=True)
+            address = cols[3].find(text=True)
+            address_url = urljoin("https://etherscan.io/",
+                                  cols[3].find(href=True).attrs['href'])
+            balance = cols[4].find(text=True)
+            matches.append([address, address_url, balance, date])
+    else:
+        return []
+    return matches
+
+
 async def process_site(update, context, exact_match=False):
     if len(context.args) < 1:
         await update.message.reply_text(WEBSITE_USAGE_FORMAT)
@@ -371,12 +433,13 @@ async def process_site(update, context, exact_match=False):
             if image_size and image_size[1]:
                 if image_size[1][0] >= 32 and image_size[1][1] >= 32:
                     image.attrs['size'] = image_size[1]
-                    image.attrs['total_size'] = image_size[1][0] * image_size[1][1]
+                    image.attrs['total_size'] = image_size[1][0] * \
+                        image_size[1][1]
                     processed_images.append(image)
             seen_images.add(image.attrs['src'])
-        
 
-        processed_images.sort(key=lambda x: x.attrs['total_size'], reverse = True)
+        processed_images.sort(
+            key=lambda x: x.attrs['total_size'], reverse=True)
         count = 0
 
         for image in processed_images:
@@ -439,6 +502,21 @@ async def text_process_exact(update, context):
     await text_process(update, context, exact_match=True)
 
 
+async def process_contract(update, context):
+    if len(context.args) < 1:
+        await update.message.reply_text(CONTRACT_USAGE_FORMAT)
+        return
+    matches = await find_similar_contracts(context.args[0])
+    if matches == False:
+        await update.message.reply_text(CONTRACT_ERROR_MESSAGE)
+    elif len(matches) == 0:
+        await update.message.reply_text(NO_MATCHES_MESSAGE)
+    else:
+        message = str(len(matches)) + " matching contract(s) found.\n\n" 
+        for i in (matches[0: 10]):
+            message += '<a href="' + i[1] + '">' + i[0] + '</a>   |   ' + 'Age: ' + str(i[3]) + '   |   ' + 'Balance: ' + str(i[2]) + "\n\n"
+        await update.message.reply_text(message, parse_mode="HTML", disable_web_page_preview=True)
+
 def main():
     application = Application.builder().token(TELEGRAM_API_KEY).build()
     application.add_handler(CommandHandler("text", text_process))
@@ -446,6 +524,7 @@ def main():
     application.add_handler(CommandHandler("website", process_site))
     application.add_handler(CommandHandler(
         "website_exact", process_site_exact))
+    application.add_handler(CommandHandler("contract", process_contract))
     application.add_handler(MessageHandler(
         filters.CAPTION & ~filters.COMMAND, logo_process))
     application.run_polling()

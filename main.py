@@ -1,157 +1,18 @@
 import asyncio
-from telegram.ext import Application, CommandHandler, ContextTypes, MessageHandler, filters
-import math
-from serpapi import GoogleSearch
-from queue import Queue
-import numpy as np
+from telegram.ext import Application, CommandHandler, MessageHandler, filters
 import html
-import re
 import telegram
 from bs4 import BeautifulSoup
-from bs4.element import Comment
-from urllib.parse import urlparse
 import validators
-import traceback
-from urllib import request as ulreq
-from PIL import ImageFile
-
-
 import requests
-from urllib.parse import urljoin
-SERP_API_KEY = open("api_key.txt", "r").read().strip()
-TELEGRAM_API_KEY = open("telegram_key.txt", "r").read().strip()
-MAX_CHAR_COUNT = 128
-MAX_WORD_COUNT = 90
-MIN_CHARS_PER_WEBSITE_TEXT = 30
-MIN_WORDS_PER_WEBSITE_TEXT = 10
-MAX_IMAGES_PER_WEBSITE = 15
-MAX_WORDS_PER_QUERY = 32
-MAX_TEXTS_PER_WEBSITE = 3
-OVER_CHAR_COUNT_MESSAGE = "One or more words in the text you submitted is over {} characters. Unfortunately, the maximum word length at this time is {} characters."
-OVER_WORD_COUNT_MESSAGE = "The text you have submitted is over the limit of {} words per text. Please re-submit with fewer words."
-TEXT_USAGE_FORMAT = "Incorrect usage of this command. Command Usage: /text Sample text to be checked goes here"
-TEXT_ERROR_MESSAGE = "An error occured while checking the text you submitted. Please try again shortly. If the error continues to occur please contact the developer."
-WEBSITE_ERROR_MESSAGE = "An error occured while checking some part of the website you submitted. If the error continues to occur please contact the developer."
-IMAGE_ERROR_MESSAGE = "An error occured while checking an image you submitted. Please try again shortly. If the error continues to occur please contact the developer."
-NO_MATCHES_MESSAGE = "Our bot couldn't find any matches. This does not guarantee the uniqueness of the text/image/contract."
-WEBSITE_USAGE_FORMAT = "Incorrect usage of this command. Command Usage: /website https://example.com"
-CONTRACT_USAGE_FORMAT = "Incorrect usage of this command. Comamnd Usage: /contract CONTRACT_ADDRESS"
-INVALID_URL_MESSAGE = "The wesbite you entered was not in the correct format. Websites should be in the format: http://example.com"
-NO_TEXT_FOUND = "Not enough text content found on the website meeting conditions for check (minimum 10 words and 30 characters per piece of text)."
-CONTRACT_ERROR_MESSAGE = "An error occured while searching for matching contracts. Please check that you provided a valid contract address."
-JAVASCRIPT_REQUIRED_MESSAGE = "Unfortunately websites that require JavaScript are not supported at this time.\n\nIf you believe this website does not require JavaScript, please contact the developer."
-EXCLUDED_WORDS = ["twitter", "telegram", "youtube",
-                  "instagram", "discord", "reddit", "tiktok"]
+from constants import *
+from matches import *
 
 
-async def generate_sub_lists(word_list, max_words_per_list):
-    if len(word_list) == 0:
-        return []
-    return np.array_split(word_list, math.ceil(len(word_list)/max_words_per_list))
-
-
-async def run_text_match(word_list, exact_match, exclude_url=None):
-    options = {"nfpr": 0, "filter": 0, "num": 40, "engine": "google",
-               "q": "", "api_key": SERP_API_KEY, "async": True}
-    search = GoogleSearch(options)
-    list_of_word_lists = await generate_sub_lists(word_list, MAX_WORDS_PER_QUERY)
-    search_queue = Queue()
-    list_of_matches = []
-    for new_list in list_of_word_lists:
-        if exact_match:
-            search.params_dict["q"] = '"' + " ".join(new_list) + '"'
-        else:
-            search.params_dict["q"] = " ".join(new_list)
-        result = search.get_dict()
-        if "error" in result and result['error'] == "Google hasn't returned any results for this query.":
-            continue
-        elif "error" in result:
-            print("oops error: ", result["error"])
-            continue
-        search_queue.put(result)
-    while not search_queue.empty():
-        result = search_queue.get()
-        search_id = result['search_metadata']['id']
-        search_archived = search.get_search_archive(search_id)
-        local_matches = []
-        if re.search('Cached|Success',
-                     search_archived['search_metadata']['status']):
-            if "organic_results" in search_archived:
-                for result in search_archived['organic_results']:
-                    url = urlparse(result['link']).netloc
-                    new_domain = str(url.replace("www.", ""))
-                    if exclude_url is not None:
-                        exclude_domain = str(
-                            urlparse(exclude_url).netloc.replace("www.", ""))
-                    if exclude_url and new_domain == exclude_domain:
-                        continue
-                    cached_page = result.get("cached_page_link", None)
-                    if cached_page is not None and not cached_page.startswith("http"):
-                        cached_page = None
-                    local_matches.append((result['title'], result.get(
-                        "link", None), cached_page))
-            if len(local_matches) != 0:
-                list_of_matches.append(local_matches)
-        else:
-            search_queue.put(result)
-            await asyncio.sleep(1.3)
-    return list_of_matches
-
-
-def getsizes(uri):
-    # get file size *and* image size (None if not known)
-    try:
-        file = ulreq.urlopen(uri)
-        size = file.headers.get("content-length")
-        if size:
-            size = int(size)
-        p = ImageFile.Parser()
-        while True:
-            data = file.read(1024)
-            if not data:
-                break
-            p.feed(data)
-            if p.image:
-                return size, p.image.size
-                break
-        file.close()
-    except Exception as e:
-        print(e)
-        return None
-    if not size:
-        return None
-    return None
-
-
-async def run_image_match(image_url, exclude_url=None):
-    options = {"engine": "yandex_images",
-               "url": image_url, "api_key": SERP_API_KEY}
-    search = GoogleSearch(options)
-    results = search.get_dict()
-
-    local_matches = []
-    if 'error' in results:
-        print(results['error'])
-        return False
-    if re.search('Cached|Success', results['search_metadata']['status']):
-        if "image_results" in results:
-            for result in results['image_results']:
-                url = urlparse(result['link']).netloc
-                new_domain = str(url.replace("www.", ""))
-                if exclude_url is not None:
-                    exclude_domain = str(
-                        urlparse(exclude_url).netloc.replace("www.", ""))
-                if exclude_url and new_domain == exclude_domain:
-                    continue
-                thumbnail = result.get("thumbnail", None)
-                if thumbnail:
-                    thumbnail = thumbnail.get("link", None)
-                original_image = result.get("original_image", None)
-                if original_image:
-                    original_image = original_image.get("link")
-                local_matches.append(
-                    (result['title'], result['link'], thumbnail, original_image))
-    return local_matches
+'''
+called when the user uses the /text or /text_exact command. 
+attempts up to 3 reverse search queries (based on text size) and returns results to user
+'''
 
 
 async def text_process(update, context, exact_match=False) -> None:
@@ -166,36 +27,21 @@ async def text_process(update, context, exact_match=False) -> None:
         if len(word) >= MAX_CHAR_COUNT:
             await update.message.reply_text(OVER_CHAR_COUNT_MESSAGE.format(MAX_CHAR_COUNT, MAX_CHAR_COUNT))
             return
+    # generate text matches from word list
     text_matches = await run_text_match(word_list, exact_match)
-    if text_matches == False:
-        await update.message.reply_text(TEXT_ERROR_MESSAGE)
-    if len(text_matches) == 0:
-        await update.message.reply_text(NO_MATCHES_MESSAGE)
-    else:
-        t_count = sum([len(i) for i in text_matches])
-        if len(text_matches) == 1:
-            displayed_results = text_matches[0][0:5]
-        elif len(text_matches) == 2:
-            displayed_results = text_matches[0][0:3] + text_matches[1][0:3]
-        else:
-            displayed_results = text_matches[0][0:3] + \
-                text_matches[1][0:3] + text_matches[2][0:3]
-        message = "Matching Results (please note that results may be from a cache and some sites may no longer contain matching text):\n\n"
-        for result in displayed_results:
-            if result[1] is None:
-                continue
-            elif result[2] is None:
-                message += (result[0] + "     |    <a href='" +
-                            result[1] + "'>Live Page</a>\n\n")
-            else:
-                message += (result[0] + "     |     <a href='" + result[1] +
-                            "'>Live Page</a>     |    <a href='" + result[2] + "'>Cached Page</a>\n\n")
-        message += "\n\nTotal of " + str(t_count) + " matching results found."
-        await update.message.reply_text(message, parse_mode="HTML", disable_web_page_preview=True)
+    # processes text matches
+    await send_text_match_response(text_matches, update.message)
+
+
+'''
+called when the user uses the /logo command
+reverse searches the attached image and provides the user with the results
+'''
 
 
 async def logo_process(update, context) -> None:
     file_path = None
+    # obtains image URL from message attachment
     if update.message.document:
         if 'image' in update.message.document.mime_type and "/logo" in update.message.caption:
             file_path = (await update.message.document.get_file())['file_path']
@@ -213,167 +59,16 @@ async def logo_process(update, context) -> None:
         else:
             return
     if file_path:
+        # attempts to find matching images
         image_matches = await run_image_match(file_path)
-        if image_matches == False:
-            await update.message.reply_text(IMAGE_ERROR_MESSAGE)
-        if len(image_matches) == 0:
-            await update.message.reply_text(NO_MATCHES_MESSAGE)
-        else:
-            message = "Matching Results:\n\n"
-            images = []
-            for result in image_matches[0:5]:
-                if result[1] is None:
-                    continue
-                elif result[3] is None or result[2] is None:
-                    message += (result[0] + "     |    <a href='" +
-                                result[1] + "'>Live Page</a>\n\n")
-                else:
-                    message += (result[0] + "     |     <a href='" + result[1] +
-                                "'>Live Page</a>     |    <a href='" + result[3] + "'>Image</a>    |    <a href='" + result[2] + "'>Thumbnail</a>\n\n")
-                if result[2] is not None and result[2].startswith("http"):
-                    images.append((result[0], result[2]))
-            message += "\n\nTotal of " + \
-                str(len(image_matches)) + \
-                " matching results found. Any available thumbnails will be sent shortly."
-            await update.message.reply_text(message, parse_mode="HTML", disable_web_page_preview=True)
-            if len(images) != 0:
-                telegram_images = []
-                for i in images:
-                    try:
-                        telegram_images.append(
-                            telegram.InputMediaPhoto(i[1], caption=i[0]))
-                    except Exception as e:
-                        print(e)
-                        # print(traceback.format_exc())
-                try:
-                    await update.message.reply_media_group(telegram_images)
-                except Exception as e:
-                    print(e)
-                    # print(traceback.format_exc())
+        # if an error occured while processing image matches
+        await send_image_match_response(image_matches, update.message)
 
 
-def tag_visible(element):
-    if element.parent.name in [
-            'style', 'script', 'head', 'title', 'meta', '[document]'
-    ]:
-        return False
-    if isinstance(element, Comment):
-        return False
-    return True
-
-
-def comments_finder(element):
-    if isinstance(element, Comment):
-        return True
-
-    if element.parent.name in [
-            'style', 'script', 'head', 'title', 'meta', '[document]'
-    ]:
-        return False
-
-    return False
-
-
-async def javascript_required(page_html):
-    if "need to enable JavaScript" in page_html:
-        return True
-    return False
-
-
-async def process_website_text(text, exclude_url, exact_match=False):
-    text_matches = await run_text_match(text.split(" ")[0: MAX_WORD_COUNT], exact_match, exclude_url)
-    if text_matches == False:
-        return None
-    if len(text_matches) == 0:
-        return 'Text from website: "' + str(text) + '"\n\n\nNo matching results.'
-    else:
-        t_count = sum([len(i) for i in text_matches])
-        if len(text_matches) == 1:
-            displayed_results = text_matches[0][0:2]
-        elif len(text_matches) == 2:
-            displayed_results = text_matches[0][0:2] + text_matches[1][0:2]
-        else:
-            displayed_results = text_matches[0][0:2] + \
-                text_matches[1][0:2] + text_matches[2][0:2]
-        message = 'Text from website: "' + \
-            str(text) + '"\n\n\nMatching Results:\n\n'
-        for result in displayed_results:
-            if result[1] is None:
-                continue
-            else:
-                message += (result[0] + "     |    <a href='" +
-                            result[1] + "'>Live Page</a>\n\n")
-        return message
-
-
-async def get_images(soup):
-    return soup.findAll("img") + soup.findAll("svg")
-
-
-async def excluded_image(image):
-    for excluded_word in EXCLUDED_WORDS:
-        if excluded_word in str(image.attrs):
-            return True
-    return not validators.url(image.attrs['src'])
-
-
-async def find_similar_contracts(contract_address):
-    headers = {
-        'authority': 'etherscan.io',
-        'accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.9',
-        'accept-language': 'en-US,en-SG;q=0.9,en;q=0.8',
-        'cache-control': 'max-age=0',
-        'dnt': '1',
-        'origin': 'https://etherscan.io',
-        'referer': 'https://etherscan.io/find-similar-contracts?a=0xcbaff378442e70f587f65ac4abce603763816117&lvl=5',
-        'sec-ch-ua': '"Google Chrome";v="105", "Not)A;Brand";v="8", "Chromium";v="105"',
-        'sec-ch-ua-mobile': '?0',
-        'sec-ch-ua-platform': '"Windows"',
-        'sec-fetch-dest': 'document',
-        'sec-fetch-mode': 'navigate',
-        'sec-fetch-site': 'same-origin',
-        'sec-fetch-user': '?1',
-        'upgrade-insecure-requests': '1',
-        'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/105.0.0.0 Safari/537.36',
-    }
-
-    params = {
-        'a': contract_address,
-        'lvl': '5',
-    }
-
-    data = {
-        '__VIEWSTATE': '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',
-        '__EVENTVALIDATION': 'QnPkGVkkxxtjHQ7dxFi+2ClU9G3gFJAbkZae504dxRIt5JLERn6xJvv5aV8g9gPVaPRu568AGVX1Fyl2ndl7lSIi0woX2S0g/rghDQ9Exphv6VMoGpy+c4MzTd+3qj/zzFf/bitroPPqOdpfthWUI4B4LvVNP/cvEJCL7Gxik3aPhSpbrsb9bG2kilDRjd7k',
-        'ctl00$ContentPlaceHolder1$txtContractAddress': contract_address,
-        'ctl00$ContentPlaceHolder1$Button1': 'Search',
-    }
-
-    response = requests.post('https://etherscan.io/find-similar-contracts',
-                             params=params, headers=headers, data=data)
-
-    soup = BeautifulSoup(response.content.decode("utf-8"), "html.parser")
-
-    base_results_box = soup.find("h3", {"class": "card-header-title mb-3"})
-    if not base_results_box:
-        return False
-    num_results = int(base_results_box.find("b").find(text=True))
-
-    matches = []
-    if num_results != 0:
-        results = soup.find("div", {"class": "table-responsive mb-1"})
-        rows = results.findAll("tr")
-        for row in rows[1:len(rows)]:
-            cols = row.findAll("td")
-            date = cols[2].find(text=True)
-            address = cols[3].find(text=True)
-            address_url = urljoin("https://etherscan.io/",
-                                  cols[3].find(href=True).attrs['href'])
-            balance = cols[4].find(text=True)
-            matches.append([address, address_url, balance, date])
-    else:
-        return []
-    return matches
+'''
+called when the user uses /website or /website_exact
+downloads website source and then reverse searches largest images and text blobs before returning it to the user
+'''
 
 
 async def process_site(update, context, exact_match=False):
@@ -389,109 +84,30 @@ async def process_site(update, context, exact_match=False):
         await update.message.reply_text("Received Error Code: " + str(response.status_code) + " while trying to reach website. Please try again shortly. This could be because the website is behind a WAF like Cloudflare.")
         return
     else:
+        # processes website source
         page_html = response.content.decode("utf-8")
-        if await javascript_required(page_html):
+        if await check_javascript_required(page_html):
             await update.message.reply_text(JAVASCRIPT_REQUIRED_MESSAGE)
             return
         soup = BeautifulSoup(page_html, "html.parser")
+
         text_elements = soup.findAll(text=True)
-        visible_texts = filter(tag_visible, text_elements)
-        visible_texts = [t.strip() for t in visible_texts]
-        visible_texts = [i for i in visible_texts if i.strip() != '']
-        visible_texts = [i.replace('"', '') for i in visible_texts if len(
-            i) >= MIN_CHARS_PER_WEBSITE_TEXT and len(i.split(" ")) >= MIN_WORDS_PER_WEBSITE_TEXT]
-        visible_texts = list(set(visible_texts))
-        visible_texts.sort(key=lambda s: len(s))
+        visible_texts = await get_visible_texts_sorted(text_elements)
+
         for i in range(len(visible_texts)):
             for word in visible_texts[i].split(" ")[0:90]:
                 if len(word) >= MAX_CHAR_COUNT:
                     visible_texts.pop(i)
                     i -= 1
-        visible_texts.reverse()
+
         if len(visible_texts) == 0:
             await update.message.reply_text(NO_TEXT_FOUND)
+
         visible_texts = visible_texts[0: MAX_TEXTS_PER_WEBSITE]
-        for visible_text in visible_texts:
-            message = await process_website_text(html.escape(visible_text), website_url, exact_match)
-            if message:
-                await update.message.reply_text(message, parse_mode="HTML", disable_web_page_preview=True)
-
+        await send_website_text_match_response(visible_texts, website_url, update.message, exact_match)
         images = await get_images(soup)
-        processed_images = []
-        seen_images = set()
-
-        for image in images:
-            if 'src' not in image.attrs or not image.attrs['src']:
-                continue
-            if not image.attrs['src'].startswith("http"):
-                image.attrs['src'] = urljoin(website_url, image.attrs['src'])
-            if image.attrs['src'] in seen_images:
-                continue
-            if await excluded_image(image):
-                continue
-            image_size = getsizes(image.attrs['src'])
-            if image_size and image_size[1]:
-                if image_size[1][0] >= 32 and image_size[1][1] >= 32:
-                    image.attrs['size'] = image_size[1]
-                    image.attrs['total_size'] = image_size[1][0] * \
-                        image_size[1][1]
-                    processed_images.append(image)
-            seen_images.add(image.attrs['src'])
-
-        processed_images.sort(
-            key=lambda x: x.attrs['total_size'], reverse=True)
-        count = 0
-
-        for image in processed_images:
-            if count == MAX_IMAGES_PER_WEBSITE:
-                return
-            else:
-                try:
-                    if count >= 3:
-                        min_total = 64 * 64
-                    elif count >= 6:
-                        min_total = 80 * 80
-                    elif count >= 13:
-                        min_total = 100 * 100
-                    else:
-                        min_total = 32 * 32
-                    if image.attrs['total_size'] < min_total:
-                        continue
-                    image_matches = await run_image_match(image.attrs['src'], website_url)
-                    if image_matches == False:
-                        await update.message.reply_text(WEBSITE_ERROR_MESSAGE)
-                    elif len(image_matches) == 0:
-                        await update.message.reply_photo(image.attrs['src'], caption=NO_MATCHES_MESSAGE)
-                    else:
-                        message = "Matching Results:\n\n"
-                        images = []
-                        for result in image_matches[0:3]:
-                            if result[1] is None:
-                                continue
-                            elif result[3] is None or result[2] is None:
-                                message += (result[0] + "     |    <a href='" +
-                                            result[1] + "'>Live Page</a>\n\n")
-                            else:
-                                message += (result[0] + "     |     <a href='" + result[1] +
-                                            "'>Live Page</a>     |    <a href='" + result[3] + "'>Image</a>\n\n")
-                            if result[2] is not None and result[2].startswith("http"):
-                                images.append((result[0], result[2]))
-                        await update.message.reply_photo(image.attrs['src'], caption=message, parse_mode="HTML")
-                        if len(images) != 0:
-                            telegram_images = []
-                            for i in images:
-                                try:
-                                    telegram_images.append(
-                                        telegram.InputMediaPhoto(i[1], caption=i[0]))
-                                except Exception as e:
-                                    print(e)
-                        await update.message.reply_media_group(telegram_images)
-
-                except Exception as e:
-                    print(e)
-                count += 1
-        await update.message.reply_text("Finished processing website: " + website_url)
-        comments = filter(comments_finder, text_elements)
+        valid_images = await get_valid_images(images, website_url)
+        await send_website_image_match_response(valid_images, update.message, website_url)
 
 
 async def process_site_exact(update, context):
@@ -502,21 +118,6 @@ async def text_process_exact(update, context):
     await text_process(update, context, exact_match=True)
 
 
-async def process_contract(update, context):
-    if len(context.args) < 1:
-        await update.message.reply_text(CONTRACT_USAGE_FORMAT)
-        return
-    matches = await find_similar_contracts(context.args[0])
-    if matches == False:
-        await update.message.reply_text(CONTRACT_ERROR_MESSAGE)
-    elif len(matches) == 0:
-        await update.message.reply_text(NO_MATCHES_MESSAGE)
-    else:
-        message = str(len(matches)) + " matching contract(s) found.\n\n" 
-        for i in (matches[0: 10]):
-            message += '<a href="' + i[1] + '">' + i[0] + '</a>   |   ' + 'Age: ' + str(i[3]) + '   |   ' + 'Balance: ' + str(i[2]) + "\n\n"
-        await update.message.reply_text(message, parse_mode="HTML", disable_web_page_preview=True)
-
 def main():
     application = Application.builder().token(TELEGRAM_API_KEY).build()
     application.add_handler(CommandHandler("text", text_process))
@@ -524,7 +125,6 @@ def main():
     application.add_handler(CommandHandler("website", process_site))
     application.add_handler(CommandHandler(
         "website_exact", process_site_exact))
-    application.add_handler(CommandHandler("contract", process_contract))
     application.add_handler(MessageHandler(
         filters.CAPTION & ~filters.COMMAND, logo_process))
     application.run_polling()

@@ -6,7 +6,7 @@ from constants import *
 import validators
 from urllib import request as ulreq
 from urllib.parse import urljoin
-
+import os
 
 def tag_visible(element):
     if element.parent.name in [
@@ -47,8 +47,6 @@ async def generate_sub_lists(word_list, max_words_per_list):
 '''
 checks image URL and returns image size if available
 '''
-
-
 def getsizes(url):
     try:
         file = ulreq.urlopen(url)
@@ -111,3 +109,5 @@ async def get_valid_images(images, website_url):
     valid_images.sort(
         key=lambda x: x.attrs['total_size'], reverse=True)
     return valid_images
+
+

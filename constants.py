@@ -1,4 +1,4 @@
-SERP_API_KEY = open("api_key.txt", "r").read().strip()
+SERP_API_KEY = open("serpapi_key.txt", "r").read().strip()
 TELEGRAM_API_KEY = open("telegram_key.txt", "r").read().strip()
 MAX_CHAR_COUNT = 128
 MAX_WORD_COUNT = 90
@@ -22,3 +22,5 @@ CONTRACT_ERROR_MESSAGE = "An error occured while searching for matching contract
 JAVASCRIPT_REQUIRED_MESSAGE = "Unfortunately websites that require JavaScript are not supported at this time.\n\nIf you believe this website does not require JavaScript, please contact the developer."
 EXCLUDED_WORDS = ["twitter", "telegram", "youtube",
                   "instagram", "discord", "reddit", "tiktok"]
+WHITELIST_TXT_FILE = "users.txt"
+ADMIN_SPECIFY_USER = "Please specify a user or list of users to be added/removed."

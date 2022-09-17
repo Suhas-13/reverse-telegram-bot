@@ -21,12 +21,21 @@ def check_whitelisted(func):
         return await func(update, context, *args, **kwargs)
     return wrapper
 
+
 def check_admin(func):
     async def wrapper(update, context,  *args, **kwargs):
         if update.message.from_user.username is None or update.message.from_user.username.lower().replace("@", "") not in whitelisted_admins:
             await update.message.reply_text("You are not authorized to add or remove users. Please contact the administrator.")
             return
         return await func(update, context, *args, **kwargs)
+    return wrapper
+
+def add_hourglass(func):
+    async def wrapper(update, context, *args, **kwargs):
+        hourglass_message = await update.message.reply_text("⌛")
+        return_value = await func(update, context, hourglass_message, *args, **kwargs)
+        await hourglass_message.delete()
+        return return_value
     return wrapper
 
 
@@ -58,7 +67,8 @@ called when the user uses the /text or /text_exact command.
 attempts up to 3 reverse search queries (based on text size) and returns results to user
 '''
 @check_whitelisted
-async def text_process(update, context, exact_match=False) -> None:
+@add_hourglass
+async def text_process(update, context, delay_message, exact_match=False) -> None:
     word_list = context.args
     if len(word_list) == 0:
         await update.message.reply_text(TEXT_USAGE_FORMAT)
@@ -81,7 +91,8 @@ called when the user uses the /logo command
 reverse searches the attached image and provides the user with the results
 '''
 @check_whitelisted
-async def logo_process(update, context) -> None:
+@add_hourglass
+async def logo_process(update, context, delay_message) -> None:
     file_path = None
     # obtains image URL from message attachment
     if update.message.document:
@@ -112,7 +123,8 @@ called when the user uses /website or /website_exact
 downloads website source and then reverse searches largest images and text blobs before returning it to the user
 '''
 @check_whitelisted
-async def process_site(update, context, exact_match=False):
+@add_hourglass
+async def process_site(update, context, delay_message, exact_match=False):
     if len(context.args) < 1:
         await update.message.reply_text(WEBSITE_USAGE_FORMAT)
         return

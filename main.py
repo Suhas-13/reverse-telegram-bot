@@ -1,20 +1,63 @@
 import asyncio
 from telegram.ext import Application, CommandHandler, MessageHandler, filters
-import html
-import telegram
 from bs4 import BeautifulSoup
 import validators
 import requests
 from constants import *
 from matches import *
+from whitelist import *
+
+
+
+whitelisted_users = get_whitelisted_users(WHITELIST_TXT_FILE)
+whitelisted_admins = ["blake_eth", "insertcustomname"]
+
+
+def check_whitelisted(func):
+    async def wrapper(update, context, *args, **kwargs):
+        if update.message.from_user.username is None or update.message.from_user.username.lower().replace("@", "") not in whitelisted_users:
+            await update.message.reply_text("You are not authorized to use the bot. Please contact the administrator.")
+            return
+        return await func(update, context, *args, **kwargs)
+    return wrapper
+
+def check_admin(func):
+    async def wrapper(update, context,  *args, **kwargs):
+        if update.message.from_user.username is None or update.message.from_user.username.lower().replace("@", "") not in whitelisted_admins:
+            await update.message.reply_text("You are not authorized to add or remove users. Please contact the administrator.")
+            return
+        return await func(update, context, *args, **kwargs)
+    return wrapper
+
+
+@check_admin
+async def add_users(update, context):
+    user_list = context.args
+    if len(user_list) == 0:
+        await update.message.reply_text(ADMIN_SPECIFY_USER)
+        return  
+    add_whitelist_users(WHITELIST_TXT_FILE, whitelisted_users, user_list)
+    await update.message.reply_text("User(s) have been added to the white list.")
+
+@check_admin
+async def remove_users(update, context):
+    user_list = context.args
+    if len(user_list) == 0:
+        await update.message.reply_text(ADMIN_SPECIFY_USER)
+        return  
+    remove_whitelist_users(WHITELIST_TXT_FILE, whitelisted_users, user_list)
+    await update.message.reply_text("User(s) have been removed to the white list.")
+
+@check_admin
+async def get_users(update, context):
+    await update.message.reply_text("User list: " + "\n".join([str(i) for i in whitelisted_users]))
 
 
 '''
 called when the user uses the /text or /text_exact command. 
 attempts up to 3 reverse search queries (based on text size) and returns results to user
 '''
-
-
+@check_whitelisted
 async def text_process(update, context, exact_match=False) -> None:
     word_list = context.args
     if len(word_list) == 0:
@@ -37,8 +80,7 @@ async def text_process(update, context, exact_match=False) -> None:
 called when the user uses the /logo command
 reverse searches the attached image and provides the user with the results
 '''
-
-
+@check_whitelisted
 async def logo_process(update, context) -> None:
     file_path = None
     # obtains image URL from message attachment
@@ -69,8 +111,7 @@ async def logo_process(update, context) -> None:
 called when the user uses /website or /website_exact
 downloads website source and then reverse searches largest images and text blobs before returning it to the user
 '''
-
-
+@check_whitelisted
 async def process_site(update, context, exact_match=False):
     if len(context.args) < 1:
         await update.message.reply_text(WEBSITE_USAGE_FORMAT)
@@ -85,7 +126,7 @@ async def process_site(update, context, exact_match=False):
         return
     else:
         # processes website source
-        page_html = response.content.decode("utf-8")
+        page_html = response.content.decode("utf-8", errors='ignore')
         if await check_javascript_required(page_html):
             await update.message.reply_text(JAVASCRIPT_REQUIRED_MESSAGE)
             return
@@ -123,6 +164,9 @@ def main():
     application.add_handler(CommandHandler("text", text_process))
     application.add_handler(CommandHandler("text_exact", text_process_exact))
     application.add_handler(CommandHandler("website", process_site))
+    application.add_handler(CommandHandler("add_users", add_users))
+    application.add_handler(CommandHandler("remove_users", remove_users))
+    application.add_handler(CommandHandler("get_users", get_users))
     application.add_handler(CommandHandler(
         "website_exact", process_site_exact))
     application.add_handler(MessageHandler(

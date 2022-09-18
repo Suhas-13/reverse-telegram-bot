@@ -114,7 +114,7 @@ async def logo_process(update, context, delay_message) -> None:
         provider = update.message.caption.split(" ")[1]
     provider_list = ["google", "yandex"]
     if provider not in provider_list:
-        await update.message.reply_text("Provider not found. Defaulting to Yandex.")
+        await update.message.reply_text("Provider not found. Defaulting to Yandex. You can specify a provider with /logo yandex or /logo google.")
         provider = "yandex"
     # obtains image URL from message attachment
     if update.message.document:

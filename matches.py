@@ -90,15 +90,22 @@ async def send_text_match_response(text_matches, reply_message):
     await reply_message.reply_text(message, parse_mode="HTML", disable_web_page_preview=True)
 
 
-async def run_image_match(image_url, exclude_url=None):
-    options = {"engine": "yandex_images",
-               "url": image_url, "api_key": SERP_API_KEY}
+async def run_image_match(image_url, provider, exclude_url=None):
+    if provider == "google":
+        options = {"engine": "google_reverse_image",
+                "image_url": image_url, "api_key": SERP_API_KEY}
+    else:
+        options = {"engine": "yandex_images",
+                "url": image_url, "api_key": SERP_API_KEY}
+        provider = "yandex"
     search = GoogleSearch(options)
     results = search.get_dict()
 
     local_matches = []
     if 'error' in results:
         print(results['error'])
+        if 'returned any results' in results['error']:
+            return []
         return False
     if re.search('Cached|Success', results['search_metadata']['status']):
         if "image_results" in results:
@@ -110,10 +117,13 @@ async def run_image_match(image_url, exclude_url=None):
                         urlparse(exclude_url).netloc.replace("www.", ""))
                 if exclude_url and new_domain == exclude_domain:
                     continue
-                thumbnail = result.get("thumbnail", None)
-                if thumbnail:
-                    thumbnail = thumbnail.get("link", None)
-                original_image = result.get("original_image", None)
+                thumbnail = result.get("thumbnail", "")
+                if thumbnail and provider == "yandex":
+                    thumbnail = thumbnail.get("link", "")
+                if provider == "yandex":
+                    original_image = result.get("original_image", "")
+                else:
+                    original_image = ""
                 if original_image:
                     original_image = original_image.get("link")
                 local_matches.append(
@@ -154,13 +164,12 @@ async def send_image_match_response(image_matches, reply_message):
                 except Exception as e:
                     print(e)
             try:
-                print("SENDING IMAGE")
                 await reply_message.reply_media_group(telegram_images)
             except Exception as e:
                 print(e)
 
 
-async def send_website_image_match_response(valid_images, reply_message, website_url):
+async def send_website_image_match_response(valid_images, reply_message, website_url, provider):
     count = 0
     for image in valid_images:
         if count == MAX_IMAGES_PER_WEBSITE:
@@ -177,7 +186,7 @@ async def send_website_image_match_response(valid_images, reply_message, website
                     min_total = 32 * 32
                 if image.attrs['total_size'] < min_total:
                     continue
-                image_matches = await run_image_match(image.attrs['src'], website_url)
+                image_matches = await run_image_match(image.attrs['src'], provider, website_url)
                 if image_matches == False:
                     await reply_message.reply_text(WEBSITE_ERROR_MESSAGE)
                 elif len(image_matches) == 0:

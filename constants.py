@@ -14,8 +14,9 @@ TEXT_ERROR_MESSAGE = "An error occured while checking the text you submitted. Pl
 WEBSITE_ERROR_MESSAGE = "An error occured while checking some part of the website you submitted. If the error continues to occur please contact the developer."
 IMAGE_ERROR_MESSAGE = "An error occured while checking an image you submitted. Please try again shortly. If the error continues to occur please contact the developer."
 NO_MATCHES_MESSAGE = "Our bot couldn't find any matches. This does not guarantee the uniqueness of the text/image/contract."
-WEBSITE_USAGE_FORMAT = "Incorrect usage of this command. Command Usage: /website https://example.com"
-CONTRACT_USAGE_FORMAT = "Incorrect usage of this command. Comamnd Usage: /contract CONTRACT_ADDRESS"
+WEBSITE_USAGE_FORMAT = "Incorrect usage of this command. Command Usage: /website https://example.com yandex to use yandex image search or /website https://example.com google to use google image search."
+CONTRACT_USAGE_FORMAT = "Incorrect usage of this command. Command Usage: /contract CONTRACT_ADDRESS"
+LOGO_USAGE_FORMAT = "Incorrect usage of this command. Command Usage: /logo yandex or /logo google Using /logo without any parameters will default to yandex."
 INVALID_URL_MESSAGE = "The wesbite you entered was not in the correct format. Websites should be in the format: http://example.com"
 NO_TEXT_FOUND = "Not enough text content found on the website meeting conditions for check (minimum 10 words and 30 characters per piece of text)."
 CONTRACT_ERROR_MESSAGE = "An error occured while searching for matching contracts. Please check that you provided a valid contract address."
@@ -24,4 +25,4 @@ EXCLUDED_WORDS = ["twitter", "telegram", "youtube",
                   "instagram", "discord", "reddit", "tiktok"]
 WHITELIST_TXT_FILE = "users.txt"
 ADMIN_SPECIFY_USER = "Please specify a user or list of users to be added/removed."
-START_MESSAGE = "Is the dev capping? Find out with the Cap Check bot 🛑🧢\n\nAvailable Commands:\n\n/contract + address -> to cap check a contract address\n/website + domain -> to cap check a website\n/website_exact + domain -> to cap check a website, with the exact text search\n/logo + attach an image -> to cap check an image\n/text + a piece of text (90 words max) -> to cap check a chunk of text\n/text_exact + a piece of text (90 words max) -> to perform a cap check on the given text, word for word"
+START_MESSAGE = "Is the dev capping? Find out with the Cap Check bot 🛑🧢\n\nAvailable Commands:\n\n/contract + address -> to cap check a contract address\n/website + domain + image search provider -> to cap check a website\n/website_exact + domain + image search provider -> to cap check a website, with the exact text search\n/logo + image search provider + attach an image -> to cap check an image\n/text + a piece of text (90 words max) -> to cap check a chunk of text\n/text_exact + a piece of text (90 words max) -> to perform a cap check on the given text, word for word"

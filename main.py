@@ -33,6 +33,7 @@ def check_admin(func):
 def add_hourglass(func):
     async def wrapper(update, context, *args, **kwargs):
         hourglass_message = await update.message.reply_text("⌛")
+        return_value = None
         try:
             return_value = await func(update, context, hourglass_message, *args, **kwargs)
         except Exception as e:
@@ -106,6 +107,15 @@ reverse searches the attached image and provides the user with the results
 @add_hourglass
 async def logo_process(update, context, delay_message) -> None:
     file_path = None
+    provider = ""
+    if context.args and len(context.args) != 0:
+        provider = context.args[1].lower()
+    elif update.message.caption and len(update.message.caption.split(" ")) >= 2:
+        provider = update.message.caption.split(" ")[1]
+    provider_list = ["google", "yandex"]
+    if provider not in provider_list:
+        await update.message.reply_text("Provider not found. Defaulting to Yandex.")
+        provider = "yandex"
     # obtains image URL from message attachment
     if update.message.document:
         if 'image' in update.message.document.mime_type and "/logo" in update.message.caption:
@@ -123,9 +133,12 @@ async def logo_process(update, context, delay_message) -> None:
             file_path = (await max_photo.get_file())['file_path']
         else:
             return
+    else:
+        await update.message.reply_text("Please attach an image to be checked along with the command.")
+        return
     if file_path:
         # attempts to find matching images
-        image_matches = await run_image_match(file_path)
+        image_matches = await run_image_match(file_path, provider)
         # if an error occured while processing image matches
         await send_image_match_response(image_matches, update.message)
 
@@ -140,11 +153,20 @@ async def process_site(update, context, delay_message, exact_match=False):
     if len(context.args) < 1:
         await update.message.reply_text(WEBSITE_USAGE_FORMAT)
         return
+    elif len(context.args) >= 2:
+        provider = context.args[1]
+    else:
+        provider = "yandex"
     website_url = context.args[0]
     if not validators.url(website_url):
         await update.message.reply_text(INVALID_URL_MESSAGE)
         return
-    response = requests.get(website_url)
+    try:
+        response = requests.get(website_url)
+    except Exception as e:
+        print(e)
+        await update.message.reply_text("Unable to reach the specified website. Please check if it is currently available. If the problem keeps occuring, please contact the administrator.")
+        return
     if not response:
         await update.message.reply_text("Received Error Code: " + str(response.status_code) + " while trying to reach website. Please try again shortly. This could be because the website is behind a WAF like Cloudflare.")
         return
@@ -172,7 +194,7 @@ async def process_site(update, context, delay_message, exact_match=False):
         await send_website_text_match_response(visible_texts, website_url, update.message, exact_match)
         images = await get_images(soup)
         valid_images = await get_valid_images(images, website_url)
-        await send_website_image_match_response(valid_images, update.message, website_url)
+        await send_website_image_match_response(valid_images, update.message, website_url, provider)
 
 
 async def process_site_exact(update, context):
@@ -196,7 +218,7 @@ def main():
     application.add_handler(CommandHandler(
         "website_exact", process_site_exact))
     application.add_handler(MessageHandler(
-        filters.CAPTION & ~filters.COMMAND, logo_process))
+        filters.CAPTION | filters.COMMAND, logo_process))
     application.run_polling()
 
 

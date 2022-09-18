@@ -24,3 +24,4 @@ EXCLUDED_WORDS = ["twitter", "telegram", "youtube",
                   "instagram", "discord", "reddit", "tiktok"]
 WHITELIST_TXT_FILE = "users.txt"
 ADMIN_SPECIFY_USER = "Please specify a user or list of users to be added/removed."
+START_MESSAGE = "Is the dev capping? Find out with the Cap Check bot 🛑🧢\n\nAvailable Commands:\n\n/contract + address -> to cap check a contract address\n/website + domain -> to cap check a website\n/website_exact + domain -> to cap check a website, with the exact text search\n/logo + attach an image -> to cap check an image\n/text + a piece of text (90 words max) -> to cap check a chunk of text\n/text_exact + a piece of text (90 words max) -> to perform a cap check on the given text, word for word"

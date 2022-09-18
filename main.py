@@ -43,7 +43,7 @@ def add_hourglass(func):
 
 @check_whitelisted
 async def start(update, context):
-    pass
+    await update.message.reply_text(START_MESSAGE)
 
 @check_admin
 async def add_users(update, context):

@@ -148,13 +148,13 @@ async def send_image_match_response(image_matches, reply_message):
         await reply_message.reply_text(message, parse_mode="HTML", disable_web_page_preview=True)
         if len(images) != 0:
             telegram_images = []
-            for i in images:
+            for image in images:
                 try:
-                    telegram_images.append(
-                        telegram.InputMediaPhoto(i[1], caption=i[0]))
+                    telegram_images.append(telegram.InputMediaPhoto(image[1], caption=image[0]))
                 except Exception as e:
                     print(e)
             try:
+                print("SENDING IMAGE")
                 await reply_message.reply_media_group(telegram_images)
             except Exception as e:
                 print(e)

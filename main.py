@@ -33,11 +33,17 @@ def check_admin(func):
 def add_hourglass(func):
     async def wrapper(update, context, *args, **kwargs):
         hourglass_message = await update.message.reply_text("⌛")
-        return_value = await func(update, context, hourglass_message, *args, **kwargs)
+        try:
+            return_value = await func(update, context, hourglass_message, *args, **kwargs)
+        except Exception as e:
+            print(e)
         await hourglass_message.delete()
         return return_value
     return wrapper
 
+@check_whitelisted
+async def start(update, context):
+    pass
 
 @check_admin
 async def add_users(update, context):
@@ -85,6 +91,12 @@ async def text_process(update, context, delay_message, exact_match=False) -> Non
     # processes text matches
     await send_text_match_response(text_matches, update.message)
 
+
+
+@check_whitelisted
+@add_hourglass
+async def contract(update, context, delay_message) -> None:
+    await update.message.reply_text("Sorry, this command is currently unavailable")
 
 '''
 called when the user uses the /logo command
@@ -179,6 +191,8 @@ def main():
     application.add_handler(CommandHandler("add_users", add_users))
     application.add_handler(CommandHandler("remove_users", remove_users))
     application.add_handler(CommandHandler("get_users", get_users))
+    application.add_handler(CommandHandler("start", start))
+    application.add_handler(CommandHandler("contract", contract))
     application.add_handler(CommandHandler(
         "website_exact", process_site_exact))
     application.add_handler(MessageHandler(

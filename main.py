@@ -10,7 +10,7 @@ from whitelist import *
 
 
 whitelisted_users = get_whitelisted_users(WHITELIST_TXT_FILE)
-whitelisted_admins = ["blake_eth", "insertcustomname"]
+whitelisted_admins = []
 
 
 def check_whitelisted(func):
